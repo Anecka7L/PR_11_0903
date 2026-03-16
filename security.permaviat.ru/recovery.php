@@ -16,6 +16,7 @@
 <html>
 	<head> 
 		<script src="https://code.jquery.com/jquery-1.8.3.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/rollups/aes.js"></script>
 		<meta charset="utf-8">
 		<title> Восстановление пароля </title>
 		
@@ -59,7 +60,7 @@
 					<div style="font-size: 12px; margin-bottom: 10px;">На указанную вами почту будет выслан новый пароль, для входа в систему.</div>
 					<input name="_login" type="text" placeholder="E-mail@mail.ru"/>
 					
-					<input type="button" class="button" value="Отправить" onclick="LogIn()" style="margin-top: 0px;"/>
+					<input type="button" class="button" value="Отправить" onclick="RecoverPassword()" style="margin-top: 0px;"/>
 					<img src = "img/loading.gif" class="loading" style="margin-top: 0px;"/>
 				</div>
 				
@@ -72,11 +73,29 @@
 		</div>
 		
 		<script>
+			const secretKey = "qazxswedcvfrtgbn";
 			var errorWindow = document.getElementsByClassName("input-error")[0];
 			var loading = document.getElementsByClassName("loading")[0];
 			var button = document.getElementsByClassName("button")[0];
 			
 			errorWindow.style.display = "none";
+
+			function encryptAES(data, key) {
+				var keyHash = CryptoJS.MD5(key);
+				var keyBytes = CryptoJS.enc.Hex.parse(keyHash.toString());
+
+				var iv = CryptoJS.lib.WordArray.random(16);
+
+				var encrypted = CryptoJS.AES.encrypt(data, keyBytes, {
+					iv: iv,
+					mode: CryptoJS.mode.CBC,
+					padding: CryptoJS.pad.Pkcs7
+				});
+
+				var combined = iv.concat(encrypted.ciphertext);
+
+				return CryptoJS.enc.Base64.stringify(combined);
+			}
 		
 			function DisableError() {
 				errorWindow.style.display = "none";
@@ -86,26 +105,32 @@
 				errorWindow.style.display = "block";
 			}
 			
-			function LogIn() {
+			function RecoverPassword() {
 				var _login = document.getElementsByName("_login")[0].value;
+				
+				if(_login == "") {
+					alert("Введите логин!");
+					return;
+				}
+				
 				loading.style.display = "block";
 				button.className = "button_diactive";
 				
+				
+				var encryptedLogin = encryptAES(_login, secretKey);
+				
 				var data = new FormData();
-				data.append("login", _login);
+				data.append("login", encryptedLogin);
 				
 				// AJAX запрос
 				$.ajax({
 					url         : 'ajax/recovery.php',
-					type        : 'POST', // важно!
+					type        : 'POST',
 					data        : data,
 					cache       : false,
 					dataType    : 'html',
-					// отключаем обработку передаваемых данных, пусть передаются как есть
 					processData : false,
-					// отключаем установку заголовка типа запроса. Так jQuery скажет серверу что это строковой запрос
 					contentType : false, 
-					// функция успешного ответа сервера
 					success: function (_data) {
 						
 						if(_data == -1) {
@@ -118,10 +143,11 @@
 							document.getElementsByClassName('description')[0].innerHTML = "На указанный вами адрес <b>"+_login+"</b> будет отправлено письмо с новым паролем.";
 							
 							document.getElementsByClassName('login')[0].style.display = "none";
+							loading.style.display = "none";
+							button.className = "button";
 						}
 					},
-					// функция ошибки
-					error: function( ){
+					error: function() {
 						console.log('Системная ошибка!');
 						loading.style.display = "none";
 						button.className = "button";

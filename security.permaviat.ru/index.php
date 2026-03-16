@@ -10,6 +10,7 @@
 		
 		<link rel="stylesheet" href="style.css">
 		<script src="https://code.jquery.com/jquery-1.8.3.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/rollups/aes.js"></script>
 	</head>
 	<body>
 		<div class="top-menu">
@@ -57,7 +58,7 @@
 											if (isset($_SESSION['user'])) {
 												echo 
 													'<div class="messages" id="'.$read_news["id"].'">
-														<input type="text">
+														<input type="text" placeholder="Введите комментарий...">
 														<div class="button" style="float: right; margin-top: 0px; margin-right: 0px;" onclick="SendMessage(this)">Отправить</div>
 													</div>';
 											}
@@ -79,13 +80,38 @@
 		</div>
 	</body>
 	<script>
+		const secretKey = "qazxswedcvfrtgbn";
+
+		function encryptAES(data, key) {
+			var keyHash = CryptoJS.MD5(key);
+			var keyBytes = CryptoJS.enc.Hex.parse(keyHash.toString());
+
+			var iv = CryptoJS.lib.WordArray.random(16);
+
+			var encrypted = CryptoJS.AES.encrypt(data, keyBytes, {
+				iv: iv,
+				mode: CryptoJS.mode.CBC,
+				padding: CryptoJS.pad.Pkcs7
+			});
+
+			var combined = iv.concat(encrypted.ciphertext);
+
+			return CryptoJS.enc.Base64.stringify(combined);
+		}
+
 		function SendMessage(sender) {
 			let Message = sender.parentElement.children[0].value;
 			let IdPost = sender.parentElement.id;
-			if(Message == "") return;
+			
+			if(Message == "") {
+				alert("Введите сообщение!");
+				return;
+			}
+
+			let encryptedMessage = encryptAES(Message, secretKey);
 
 			var Data = new FormData();
-			Data.append("Message", Message);
+			Data.append("Message", encryptedMessage);
 			Data.append("IdPost", IdPost);
 			
 			$.ajax({
@@ -97,14 +123,13 @@
 					processData : false,
 					contentType : false, 
 					success: function (_data) {
-						console.log(_data);
+						console.log("Комментарий отправлен");
 						sender.parentElement.children[0].value = "";
 						sender.parentElement.parentElement.children[2].innerHTML += "<div>" + Message + "</div>";
-
 					},
-					// функция ошибки
-					error: function( ){
+					error: function() {
 						console.log('Системная ошибка!');
+						alert("Ошибка при отправке комментария");
 					}
 				});
 		}
